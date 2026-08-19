@@ -1,0 +1,57 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { ArrowDownUp, ChevronRight, Search, SlidersHorizontal, X } from "lucide-react";
+import { useAvatarApp } from "@/components/avatar/avatar-provider";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { filterTickets, type TicketFilters } from "@/lib/data/tickets";
+import type { SupportTicket, TicketPriority, TicketStatus } from "@/lib/domain/types";
+
+const statuses:TicketStatus[]=["OPEN","IN_PROGRESS","WAITING","RESOLVED","CLOSED"];
+const statusTone=(status:TicketStatus)=>status==="OPEN"?"warning":status==="RESOLVED"||status==="CLOSED"?"success":"neutral";
+const priorityTone=(priority:TicketPriority)=>priority==="URGENT"?"danger":priority==="HIGH"?"warning":"neutral";
+const demoNow=new Date("2026-08-15T12:00:00.000Z").getTime();
+
+export function TicketWorkspace({initialStatus,initialPriority,initialTeam,initialTicket,tickets}:{initialStatus?:string;initialPriority?:string;initialTeam?:string;initialTicket?:number;tickets:SupportTicket[]}){
+  const app=useAvatarApp();
+  const [ticketRows,setTicketRows]=useState(tickets);
+  const [search,setSearch]=useState("");
+  const [sortNewest,setSortNewest]=useState(true);
+  const [selected,setSelected]=useState<SupportTicket|null>(()=>tickets.find((ticket)=>ticket.id===initialTicket)??null);
+  const [filters,setFilters]=useState<TicketFilters>(()=>({status:(initialStatus as TicketStatus)||"ALL",priority:(initialPriority as TicketPriority)||"ALL",team:initialTeam||"ALL"}));
+  const updateFilters=(patch:Partial<TicketFilters>)=>{const next={...filters,...patch};setFilters(next);app.setTicketFilters(next);};
+  const resetFilters=()=>{const reset:TicketFilters={status:"ALL",priority:"ALL",team:"ALL"};setFilters(reset);app.setTicketFilters(reset);};
+  const visible=useMemo(()=>filterTickets(ticketRows,{...filters,search}).sort((a,b)=>sortNewest?b.createdAt.localeCompare(a.createdAt):a.createdAt.localeCompare(b.createdAt)),[filters,search,sortNewest,ticketRows]);
+  const openCount=ticketRows.filter((ticket)=>ticket.status==="OPEN").length;
+  const urgentCount=ticketRows.filter((ticket)=>ticket.priority==="URGENT"&&!(["CLOSED","RESOLVED"] as string[]).includes(ticket.status)).length;
+  const handleUpdated=(ticket:SupportTicket)=>{setTicketRows((rows)=>rows.map((row)=>row.id===ticket.id?ticket:row));setSelected(ticket);};
+
+  return <>
+    <section data-avatar-target="support-summary" className="mt-6 grid border border-[var(--line)] bg-[var(--surface-strong)] sm:grid-cols-3"><div className="border-b border-[var(--line)] px-5 py-4 sm:border-b-0 sm:border-r"><p className="eyebrow">Open</p><p className="mt-2 font-data text-2xl">{openCount}</p></div><div className="border-b border-[var(--line)] px-5 py-4 sm:border-b-0 sm:border-r"><p className="eyebrow">Urgent active</p><p className="mt-2 font-data text-2xl text-[var(--danger)]">{urgentCount}</p></div><div className="px-5 py-4"><p className="eyebrow">Median first response</p><p className="mt-2 font-data text-2xl">18m</p></div></section>
+    <section className="surface mt-6 overflow-hidden" data-avatar-target="ticket-table"><div className="flex flex-col gap-3 border-b border-[var(--line)] p-4 lg:flex-row lg:items-center"><label className="relative min-w-0 flex-1"><span className="sr-only">Search tickets</span><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]"/><input value={search} onChange={(event)=>setSearch(event.target.value)} placeholder="Search ticket, customer or number" className="h-10 w-full rounded-md border border-[var(--line)] bg-[var(--canvas)] pl-9 pr-3 text-xs outline-none focus:border-[var(--signal)]"/></label><div className="flex flex-wrap gap-2"><FilterSelect label="Status" value={filters.status??"ALL"} onChange={(value)=>updateFilters({status:value as TicketStatus|"ALL"})} options={["ALL",...statuses]}/><FilterSelect label="Priority" value={filters.priority??"ALL"} onChange={(value)=>updateFilters({priority:value as TicketPriority|"ALL"})} options={["ALL","URGENT","HIGH","MEDIUM","LOW"]}/><FilterSelect label="Team" value={filters.team??"ALL"} onChange={(value)=>updateFilters({team:value})} options={["ALL","Product","Billing","Platform","Customer success"]}/><Button variant="ghost" size="icon" onClick={()=>setSortNewest((value)=>!value)} aria-label="Toggle date sort"><ArrowDownUp size={15}/></Button></div></div>
+      <div className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--canvas)] px-5 py-2 text-[10px] text-[var(--muted)]"><span>{visible.length} of {ticketRows.length} tickets</span>{(filters.status!=="ALL"||filters.priority!=="ALL"||filters.team!=="ALL")&&<button className="flex items-center gap-1 text-[var(--signal)]" onClick={resetFilters}><X size={11}/>Clear filters</button>}</div>
+      <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-xs"><thead className="border-b border-[var(--line)] text-[10px] uppercase tracking-[.08em] text-[var(--muted)]"><tr><th className="px-5 py-3 font-medium">Ticket</th><th className="px-3 py-3 font-medium">Status</th><th className="px-3 py-3 font-medium">Priority</th><th className="px-3 py-3 font-medium">Team</th><th className="px-3 py-3 font-medium">Customer</th><th className="px-5 py-3 text-right font-medium">Age</th></tr></thead><tbody className="divide-y divide-[var(--line)]">{visible.map((ticket)=><tr key={ticket.id} data-avatar-target={`ticket-${ticket.id}`} role="button" tabIndex={0} onKeyDown={(event)=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();setSelected(ticket);}}} onClick={()=>setSelected(ticket)} className="cursor-pointer hover:bg-[var(--canvas)] focus-visible:outline-2 focus-visible:outline-[var(--signal)]"><td className="px-5 py-3.5"><div className="flex items-center gap-3"><span className="font-data text-[10px] text-[var(--muted)]">#{ticket.id}</span><span className="max-w-[290px] truncate font-semibold">{ticket.title}</span></div></td><td className="px-3 py-3.5"><Badge tone={statusTone(ticket.status)}>{ticket.status.replace("_"," ")}</Badge></td><td className="px-3 py-3.5"><Badge tone={priorityTone(ticket.priority)}>{ticket.priority}</Badge></td><td className="px-3 py-3.5">{ticket.assignedTeam}</td><td className="px-3 py-3.5 text-[var(--muted)]">{ticket.customer}</td><td className="px-5 py-3.5 text-right font-data text-[10px] text-[var(--muted)]">{Math.max(1,Math.floor((demoNow-new Date(ticket.createdAt).getTime())/864e5))}d <ChevronRight size={13} className="ml-2 inline"/></td></tr>)}</tbody></table>{visible.length===0&&<div className="grid min-h-48 place-items-center p-8 text-center"><div><SlidersHorizontal className="mx-auto text-[var(--muted)]" size={22}/><p className="mt-3 text-sm font-semibold">No tickets match these filters</p><button onClick={()=>{setSearch("");resetFilters();}} className="mt-2 text-xs text-[var(--signal)]">Reset the queue</button></div></div>}</div>
+    </section>
+    {selected&&<TicketDetail key={selected.id} ticket={selected} onUpdated={handleUpdated} onClose={()=>setSelected(null)}/>}
+  </>;
+}
+
+function FilterSelect({label,value,onChange,options}:{label:string;value:string;onChange:(value:string)=>void;options:string[]}){return <label className="relative"><span className="sr-only">{label}</span><select value={value} onChange={(event)=>onChange(event.target.value)} className="h-10 rounded-md border border-[var(--line)] bg-[var(--surface-strong)] px-3 pr-8 text-xs font-medium outline-none focus:border-[var(--signal)]">{options.map((option)=><option key={option} value={option}>{option==="ALL"?`All ${label.toLowerCase()}`:option.replace("_"," ")}</option>)}</select></label>;}
+
+function TicketDetail({ticket,onClose,onUpdated}:{ticket:SupportTicket;onClose:()=>void;onUpdated:(ticket:SupportTicket)=>void}){
+  const [status,setStatus]=useState<TicketStatus>(ticket.status);
+  const [pending,setPending]=useState<"assign"|"status"|null>(null);
+  const [message,setMessage]=useState<string|null>(null);
+  const mutate=async(body:{action:"assign_to_me"}|{action:"set_status";status:TicketStatus},kind:"assign"|"status")=>{
+    setPending(kind);setMessage(null);
+    try{
+      const response=await fetch(`/api/tickets/${ticket.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      const payload=await response.json() as {ticket?:SupportTicket;error?:string};
+      if(!response.ok||!payload.ticket)throw new Error(payload.error??"Update failed");
+      onUpdated(payload.ticket);setStatus(payload.ticket.status);setMessage(kind==="assign"?"Ticket assigned to you.":"Status updated.");
+    }catch(error){setMessage(error instanceof Error?error.message:"The ticket could not be updated.");}
+    finally{setPending(null);}
+  };
+  return <div className="fixed inset-0 z-40 flex justify-end bg-black/25" onMouseDown={(event)=>{if(event.currentTarget===event.target)onClose();}}><article role="dialog" aria-modal="true" aria-labelledby="ticket-title" className="h-full w-full max-w-lg overflow-y-auto bg-[var(--surface-strong)] shadow-2xl"><header className="sticky top-0 flex items-start justify-between border-b border-[var(--line)] bg-[var(--surface-strong)] p-6"><div><p className="font-data text-[10px] text-[var(--muted)]">TICKET #{ticket.id}</p><h2 id="ticket-title" className="mt-2 text-xl font-semibold tracking-[-.03em]">{ticket.title}</h2></div><button onClick={onClose} className="rounded p-2 text-[var(--muted)] hover:bg-[var(--canvas)]" aria-label="Close ticket"><X size={18}/></button></header><div className="p-6"><div className="flex gap-2"><Badge tone={statusTone(ticket.status)}>{ticket.status.replace("_"," ")}</Badge><Badge tone={priorityTone(ticket.priority)}>{ticket.priority}</Badge></div><p className="mt-7 text-sm leading-7 text-[var(--muted)]">{ticket.description}</p><dl className="mt-8 divide-y divide-[var(--line)] border-y border-[var(--line)] text-xs">{[["Customer",ticket.customer],["Category",ticket.category],["Assigned team",ticket.assignedTeam],["Owner",ticket.assignedUser],["Created",new Intl.DateTimeFormat("en-GB",{dateStyle:"medium",timeStyle:"short"}).format(new Date(ticket.createdAt))],["Updated",new Intl.DateTimeFormat("en-GB",{dateStyle:"medium",timeStyle:"short"}).format(new Date(ticket.updatedAt))]].map(([label,value])=><div key={label} className="grid grid-cols-[130px_1fr] py-3"><dt className="text-[var(--muted)]">{label}</dt><dd className="font-medium">{value}</dd></div>)}</dl><div className="mt-8"><Button disabled={pending!==null} onClick={()=>void mutate({action:"assign_to_me"},"assign")}>{pending==="assign"?"Assigning…":"Assign to me"}</Button><div className="mt-4 flex gap-2"><label className="flex-1"><span className="sr-only">New ticket status</span><select value={status} onChange={(event)=>setStatus(event.target.value as TicketStatus)} className="h-10 w-full rounded-md border border-[var(--line-strong)] bg-[var(--surface-strong)] px-3 text-xs outline-none focus:border-[var(--signal)]">{statuses.map((option)=><option key={option} value={option}>{option.replace("_"," ")}</option>)}</select></label><Button variant="secondary" disabled={pending!==null||status===ticket.status} onClick={()=>void mutate({action:"set_status",status},"status")}>{pending==="status"?"Updating…":"Update status"}</Button></div>{message&&<p aria-live="polite" className="mt-3 text-xs text-[var(--muted)]">{message}</p>}</div></div></article></div>;
+}

@@ -1,0 +1,43 @@
+CREATE SCHEMA IF NOT EXISTS "public";
+CREATE TYPE "TicketStatus" AS ENUM ('OPEN', 'IN_PROGRESS', 'WAITING', 'RESOLVED', 'CLOSED');
+CREATE TYPE "TicketPriority" AS ENUM ('LOW', 'MEDIUM', 'HIGH', 'URGENT');
+CREATE TYPE "AvatarSessionStatus" AS ENUM ('PREPARING', 'ACTIVE', 'COMPLETED', 'FAILED', 'EXPIRED');
+CREATE TYPE "ToolExecutionStatus" AS ENUM ('PENDING', 'SUCCEEDED', 'FAILED', 'DENIED');
+CREATE TYPE "KnowledgeStatus" AS ENUM ('PROCESSING', 'READY', 'FAILED');
+
+CREATE TABLE "AppUser" ("id" TEXT NOT NULL,"email" TEXT,"displayName" TEXT,"role" TEXT NOT NULL DEFAULT 'MEMBER',"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" TIMESTAMP(3) NOT NULL,CONSTRAINT "AppUser_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "UserPreference" ("id" TEXT NOT NULL,"userId" TEXT NOT NULL,"theme" TEXT NOT NULL DEFAULT 'system',"captionsEnabled" BOOLEAN NOT NULL DEFAULT true,"microphoneDefault" BOOLEAN NOT NULL DEFAULT true,"cameraDefault" BOOLEAN NOT NULL DEFAULT false,"screenSharePrompt" BOOLEAN NOT NULL DEFAULT true,"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" TIMESTAMP(3) NOT NULL,CONSTRAINT "UserPreference_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "RevenueEntry" ("id" TEXT NOT NULL,"occurredAt" TIMESTAMP(3) NOT NULL,"grossPence" INTEGER NOT NULL,"feePence" INTEGER NOT NULL DEFAULT 0,"currency" TEXT NOT NULL DEFAULT 'GBP',"source" TEXT NOT NULL,"transactionId" TEXT NOT NULL,"metadata" JSONB,"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT "RevenueEntry_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "Refund" ("id" TEXT NOT NULL,"revenueEntryId" TEXT NOT NULL,"amountPence" INTEGER NOT NULL,"reason" TEXT NOT NULL,"occurredAt" TIMESTAMP(3) NOT NULL,"status" TEXT NOT NULL DEFAULT 'SUCCEEDED',"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT "Refund_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "SupportTicket" ("id" TEXT NOT NULL,"ticketNumber" INTEGER NOT NULL,"title" TEXT NOT NULL,"description" TEXT NOT NULL,"status" "TicketStatus" NOT NULL,"priority" "TicketPriority" NOT NULL,"category" TEXT NOT NULL,"assignedTeam" TEXT NOT NULL,"assignedUser" TEXT,"customer" TEXT NOT NULL,"createdAt" TIMESTAMP(3) NOT NULL,"updatedAt" TIMESTAMP(3) NOT NULL,CONSTRAINT "SupportTicket_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "AvatarSession" ("id" TEXT NOT NULL,"userId" TEXT NOT NULL,"runwayConversationId" TEXT,"avatarId" TEXT NOT NULL,"startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"endedAt" TIMESTAMP(3),"durationSeconds" INTEGER,"status" "AvatarSessionStatus" NOT NULL DEFAULT 'PREPARING',"transcript" JSONB,"errorCode" TEXT,CONSTRAINT "AvatarSession_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "AvatarToolExecution" ("id" TEXT NOT NULL,"sessionId" TEXT NOT NULL,"toolName" TEXT NOT NULL,"toolType" TEXT NOT NULL,"arguments" JSONB NOT NULL,"result" JSONB,"status" "ToolExecutionStatus" NOT NULL,"durationMs" INTEGER,"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT "AvatarToolExecution_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "KnowledgeDocument" ("id" TEXT NOT NULL,"name" TEXT NOT NULL,"type" TEXT NOT NULL,"content" TEXT NOT NULL,"status" "KnowledgeStatus" NOT NULL DEFAULT 'PROCESSING',"runwayDocumentId" TEXT,"tokenCount" INTEGER NOT NULL DEFAULT 0,"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" TIMESTAMP(3) NOT NULL,CONSTRAINT "KnowledgeDocument_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "ActivityEvent" ("id" TEXT NOT NULL,"userId" TEXT,"eventName" TEXT NOT NULL,"properties" JSONB,"occurredAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT "ActivityEvent_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "DashboardEvent" ("id" TEXT NOT NULL,"userId" TEXT,"page" TEXT NOT NULL,"action" TEXT NOT NULL,"target" TEXT,"metadata" JSONB,"occurredAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT "DashboardEvent_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "AuditLog" ("id" TEXT NOT NULL,"userId" TEXT,"action" TEXT NOT NULL,"resource" TEXT NOT NULL,"resourceId" TEXT,"metadata" JSONB,"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT "AuditLog_pkey" PRIMARY KEY ("id"));
+
+CREATE UNIQUE INDEX "AppUser_email_key" ON "AppUser"("email");
+CREATE UNIQUE INDEX "UserPreference_userId_key" ON "UserPreference"("userId");
+CREATE UNIQUE INDEX "RevenueEntry_transactionId_key" ON "RevenueEntry"("transactionId");
+CREATE INDEX "RevenueEntry_occurredAt_idx" ON "RevenueEntry"("occurredAt");
+CREATE INDEX "Refund_occurredAt_idx" ON "Refund"("occurredAt");
+CREATE UNIQUE INDEX "SupportTicket_ticketNumber_key" ON "SupportTicket"("ticketNumber");
+CREATE INDEX "SupportTicket_status_priority_idx" ON "SupportTicket"("status", "priority");
+CREATE INDEX "SupportTicket_assignedTeam_idx" ON "SupportTicket"("assignedTeam");
+CREATE UNIQUE INDEX "AvatarSession_runwayConversationId_key" ON "AvatarSession"("runwayConversationId");
+CREATE INDEX "AvatarSession_userId_startedAt_idx" ON "AvatarSession"("userId", "startedAt");
+CREATE INDEX "AvatarToolExecution_sessionId_createdAt_idx" ON "AvatarToolExecution"("sessionId", "createdAt");
+CREATE INDEX "AvatarToolExecution_toolName_idx" ON "AvatarToolExecution"("toolName");
+CREATE UNIQUE INDEX "KnowledgeDocument_runwayDocumentId_key" ON "KnowledgeDocument"("runwayDocumentId");
+CREATE INDEX "KnowledgeDocument_status_updatedAt_idx" ON "KnowledgeDocument"("status", "updatedAt");
+CREATE INDEX "ActivityEvent_eventName_occurredAt_idx" ON "ActivityEvent"("eventName", "occurredAt");
+CREATE INDEX "ActivityEvent_userId_occurredAt_idx" ON "ActivityEvent"("userId", "occurredAt");
+CREATE INDEX "DashboardEvent_page_occurredAt_idx" ON "DashboardEvent"("page", "occurredAt");
+CREATE INDEX "AuditLog_userId_createdAt_idx" ON "AuditLog"("userId", "createdAt");
+
+ALTER TABLE "UserPreference" ADD CONSTRAINT "UserPreference_userId_fkey" FOREIGN KEY ("userId") REFERENCES "AppUser"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Refund" ADD CONSTRAINT "Refund_revenueEntryId_fkey" FOREIGN KEY ("revenueEntryId") REFERENCES "RevenueEntry"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "AvatarSession" ADD CONSTRAINT "AvatarSession_userId_fkey" FOREIGN KEY ("userId") REFERENCES "AppUser"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "AvatarToolExecution" ADD CONSTRAINT "AvatarToolExecution_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "AvatarSession"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_userId_fkey" FOREIGN KEY ("userId") REFERENCES "AppUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;

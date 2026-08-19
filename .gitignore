@@ -1,0 +1,17 @@
+node_modules
+.next
+out
+coverage
+playwright-report
+test-results
+.playwright-cli
+output/playwright
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+!.env.example
+*.log
+prisma/dev.db
+prisma/dev.db-journal
+generated
